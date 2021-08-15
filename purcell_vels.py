@@ -2,6 +2,27 @@ import numpy as np
 import math
 
 
+def swimmer_model(state,t,phidotF,params):
+    theta = state[2]
+    phi = np.array([[state[3]],[state[4]]])
+    G0, W = purcell_body_connection(phi,params)
+    G = np.dot(Rotation_matrix_planar(theta),G0)
+    phidot_n = np.array([[phidotF["phidot1F"](t)],[phidotF["phidot2F"](t)]])
+
+    swimmer_vel = np.dot(G,phidot_n)
+    state_dyn = np.concatenate((swimmer_vel, phidot_n), axis=0)
+    state_dyn_l = state_dyn.reshape((5,)).tolist()
+    return state_dyn_l
+
+def Rotation_matrix_planar(theta):
+    Rot = np.array([
+        [math.cos(theta), -math.sin(theta), 0],
+        [math.sin(theta), math.cos(theta), 0],
+        [0, 0, 1]
+        ]) 
+    return Rot
+
+
 def resistance_tensor(alpha,l,ct):
 
     R = ct*l*np.array([[1+math.sin(alpha)**2, -math.sin(alpha)*math.cos(alpha),  0],
@@ -10,14 +31,10 @@ def resistance_tensor(alpha,l,ct):
     return R
 
 
-def purcel_body_velsM(phi,params):
-    phi1 = phi["phi1"]
-    phi2 = phi["phi2"]
-    # phi1dot = phidot["phi1dot"]
-    # phi2dot = phidot["phi2dot"]
-
-    
-
+def purcell_body_connection(phi,params):
+    phi1 = phi[0]
+    phi2 = phi[1]
+ 
     l0 = params["l0"]
     l1 = params["l1"]
     l2 = params["l2"]
@@ -43,7 +60,7 @@ def purcel_body_velsM(phi,params):
     E = np.concatenate((E0, E1, E2), axis=0)
 
     R0 = resistance_tensor(0,l0,ct)
-    R1 = resistance_tensor(phi1,l1,ct)
+    R1 = resistance_tensor(-phi1,l1,ct)
     R2 = resistance_tensor(phi2,l2,ct)
     R  = np.block([
             [R0, np.zeros((3,6))],
@@ -52,37 +69,24 @@ def purcel_body_velsM(phi,params):
 
     Rbb = np.matmul(np.matmul(T.T,R),T)
     Rbu = np.matmul(np.matmul(T.T,R),E)
-      
-    detRbb = np.linalg.det(Rbb)
-
-    G = -np.matmul(np.linalg.inv(Rbb), Rbu)
-    # Vel = np.dot(G,phidot)
-    return G
-          
+    Ruu = np.matmul(np.matmul(E.T,R),E)
     
 
+    # detRbb = np.linalg.det(Rbb)
 
-phi = {"phi1" : 0,
-       "phi2" : -math.pi/2}
+    G0 = -np.matmul(np.linalg.inv(Rbb), Rbu)
+    W = Ruu+np.matmul(Rbu.T,G0)
 
-# phidot = {"phi1dot" : 0,
-    #    "phi2dot" : 0} 
-
-phidot = np.array([[0],[0]],)
-params = {"l0" : 1,
-          "l1" : 1,
-          "l2" : 1,
-          "ct": 1}
-
-G = purcel_body_velsM(phi,params)
-vel = np.dot(G,phidot)
-print(G)
+    return G0, W
 
 
-# print("Velocities:"+ str(vel))
+def Purcell_velocities(state,phidot,params):
 
+    theta = state[2].copy()
+    phi = state[0:2].copy()
+    G0, W = purcell_body_connection(phi,params)
+    G = np.dot(Rotation_matrix_planar(theta),G0)
 
+    swimmer_vel = np.dot(G,phidot)
 
-
-
-
+    return swimmer_vel
